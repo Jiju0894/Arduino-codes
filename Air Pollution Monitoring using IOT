@@ -1,0 +1,201 @@
+#include<LiquidCrystal.h>
+#include <SoftwareSerial.h>       //Software Serial library
+SoftwareSerial espSerial(2, 3);   //Pin 2 and 3 act as RX and TX. Connect them to TX and RX of ESP8266      
+#define DEBUG true
+String mySSID = "OnePlus Nord";       // WiFi SSID
+String myPWD = "bluerose123"; // WiFi Password
+String myAPI = "XVC25I1ENU6KDP1B";   // API Key
+String myHOST = "api.thingspeak.com";
+String myPORT = "80";
+String myFIELD1 = "field1"; 
+String myFIELD2 = "field2"; 
+String myFIELD3 = "field3"; 
+//int sendVal;
+int measurePin = A2;
+int ledPower = 13;
+int mq_135= A0;
+int gas_sensor=A1;
+
+int RS=12;
+int EN=11;
+int D4=10;
+int D5=9;
+int D6=8;
+int D7=7;
+unsigned int samplingTime = 280;
+unsigned int deltaTime = 40;
+unsigned int sleepTime = 9680;
+int sensor_val;
+int gas_val;
+
+float voMeasured = 0;
+float calcVoltage = 0;
+float dustDensity = 0;
+bool flag=0;
+LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
+
+void setup()
+{
+  Serial.begin(9600);
+  espSerial.begin(115200);
+  lcd.begin(16,2);
+  pinMode(ledPower,OUTPUT);
+  pinMode(mq_135,INPUT);
+  pinMode(gas_sensor,INPUT);
+
+  espData("AT+RST", 1000, DEBUG);                      //Reset the ESP8266 module
+  espData("AT+CWMODE=1", 1000, DEBUG);                 //Set the ESP mode as station mode
+  espData("AT+CWJAP=\""+ mySSID +"\",\""+ myPWD +"\"", 1000, DEBUG);   //Connect to WiFi network
+
+  delay(1000);
+}
+
+void loop()
+{
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("AIR POLLUTION");
+  lcd.setCursor(3,1);
+  lcd.print("MONITORING");
+  delay(1000);
+  digitalWrite(ledPower,LOW);
+  delayMicroseconds(samplingTime);
+  voMeasured = analogRead(measurePin);
+  delayMicroseconds(deltaTime);
+  digitalWrite(ledPower,HIGH);
+  delayMicroseconds(sleepTime);
+
+  calcVoltage = voMeasured*(5.0/1024);
+  dustDensity = 0.17*calcVoltage-0.1;
+
+   sensor_val= analogRead(mq_135);
+   gas_val = analogRead(gas_sensor);
+  
+  
+
+//  if ( dustDensity < 0)
+//  {
+//    dustDensity = 0.00;
+//  }
+//
+//  Serial.println("Raw Signal Value (0-1023):");
+//  Serial.println(voMeasured);
+//
+//  Serial.println("Voltage:");
+//  Serial.println(calcVoltage);
+
+  Serial.print("AirQua=");
+  Serial.print(sensor_val);               // prints the value read
+  Serial.println(" PPM");
+
+  Serial.print("Dust Density:");
+  Serial.println(dustDensity);
+
+  Serial.print("Gas Value:");
+  Serial.println(gas_val);
+
+  lcd.setCursor(0,0);
+  lcd.print("Air=");
+  lcd.print(sensor_val);
+  lcd.setCursor(9,0);
+  lcd.print("Gas=");
+  lcd.print(gas_val);
+  lcd.setCursor(0,1);
+  lcd.print("Dust=");
+  lcd.print(dustDensity);
+  lcd.setCursor(10,1);
+  lcd.print("PPM");
+  delay(2000);
+  
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("UPLOADING...");
+  wifi_send(sensor_val,gas_val,dustDensity );
+  delay(1000);
+  lcd.setCursor(0,1);
+  lcd.print("UPLOADED");
+  delay(2000);
+
+  if (sensor_val>450 || gas_val>550 || dustDensity>0.5 )
+  {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("ALERT");
+    lcd.setCursor(0,1);
+    lcd.print("POLLUTION");
+    delay(1000);
+    SendMessage();
+    delay(1000);
+  }
+  delay(1000);
+}
+
+void wifi_send(unsigned int a,unsigned int b, float c)
+{
+    //sendVal = random(1000); // Send a random number between 1 and 1000
+    String sendData = "GET https://api.thingspeak.com/update?api_key="+ myAPI +"&"+ myFIELD1 +"="+String(a)+"&"+ myFIELD2 +"="+String(b)+"&"+ myFIELD3 +"="+String(c);
+    espData("AT+CIPMUX=1", 1000, DEBUG);       //Allow multiple connections
+    espData("AT+CIPSTART=0,\"TCP\",\""+ myHOST +"\","+ myPORT, 1000, DEBUG);
+    espData("AT+CIPSEND=0," +String(sendData.length()+4),1000,DEBUG);  
+    espSerial.find(">"); 
+    espSerial.println(sendData);
+    Serial.print("Value to be sent: ");
+    Serial.println("Uploaded");
+     
+    espData("AT+CIPCLOSE=0",1000,DEBUG);
+    delay(10000);
+  }
+
+String espData(String command, const int timeout, boolean debug)
+{
+  Serial.print("AT Command ==> ");
+  Serial.print(command);
+  Serial.println("     ");
+  
+  String response = "";
+  espSerial.println(command);
+  long int time = millis();
+  while ( (time + timeout) > millis())
+  {
+    while (espSerial.available())
+    {
+      char c = espSerial.read();
+      response += c;
+    }
+  }
+  if (debug)
+  {
+    //Serial.print(response);
+  }
+  return response;
+}
+
+void SendMessage()
+{
+  
+  if (flag==0)
+  {
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Sending Msg....");
+      Serial.println("AT+CMGF=1");
+      delay(1000);  // Delay of 1000 milli seconds or 1 second
+      delay(100);
+      Serial.println("AT+CMGS=\"+919526234625\"\r");
+      delay(1000);
+      Serial.println("Air Pollution Monitoring:: ");
+      Serial.print("Air Quality= ");
+      Serial.println(sensor_val);
+      Serial.print("Gas Value= ");
+      Serial.println(gas_val);
+      Serial.print("Dust Density= ");
+      Serial.println(dustDensity);
+      delay(100);
+      Serial.println((char)26);// ASCII code of CTRL+Z
+      delay(1000);
+      lcd.setCursor(0,1);
+      lcd.print(" MSG SEND");
+      delay(1000);
+      flag=1;
+  }
+}
