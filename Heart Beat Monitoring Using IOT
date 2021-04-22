@@ -1,0 +1,130 @@
+#define USE_ARDUINO_INTERRUPTS true    // Set-up low-level interrupts for most acurate BPM math.
+#include <PulseSensorPlayground.h>
+#include <SoftwareSerial.h>       //Software Serial library
+#include<LiquidCrystal.h>
+SoftwareSerial espSerial(2, 3);   //Pin 2 and 3 act as RX and TX. Connect them to TX and RX of ESP8266      
+#define DEBUG true
+String mySSID = "Manohar";       // WiFi SSID
+String myPWD = "9603588551$"; // WiFi Password
+String myAPI = "KCW69Z9FFAN8HGIN";   // API Key
+String myHOST = "api.thingspeak.com";
+String myPORT = "80";
+String myFIELD = "field1"; 
+int sendVal;
+
+const int PulseWire = A3;       // PulseSensor PURPLE WIRE connected to ANALOG PIN 0
+const int LED13 = 13;          // The on-board Arduino LED, close to PIN 13.
+int Threshold = 550;
+int buzzer=6;
+PulseSensorPlayground pulseSensor;
+
+int RS=12;
+int EN=11;
+int D4=10;
+int D5=9;
+int D6=8;
+int D7=7;
+LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
+
+void setup()
+{
+  Serial.begin(9600);
+  espSerial.begin(115200);
+  lcd.begin(16,2);
+  pinMode(buzzer,OUTPUT);
+  pulseSensor.analogInput(PulseWire);   
+  pulseSensor.blinkOnPulse(LED13);       //auto-magically blink Arduino's LED with heartbeat.
+  pulseSensor.setThreshold(Threshold); 
+  
+  espData("AT+RST", 1000, DEBUG);                      //Reset the ESP8266 module
+  espData("AT+CWMODE=1", 1000, DEBUG);                 //Set the ESP mode as station mode
+  espData("AT+CWJAP=\""+ mySSID +"\",\""+ myPWD +"\"", 1000, DEBUG);   //Connect to WiFi network
+  delay(1000);
+  if (pulseSensor.begin()) {
+    Serial.println("We created a pulseSensor Object !");  //This prints one time at Arduino power-up,  or on Arduino reset.  
+  }
+   
+}
+
+  void loop()
+  {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("HEART BEAT");
+    lcd.setCursor(3,1);
+    lcd.print("MONITORING");
+    delay(1000);
+    int myBPM = pulseSensor.getBeatsPerMinute();  // Calls function on our pulseSensor object that returns BPM as an "int".
+                                               // "myBPM" hold this BPM value now. 
+
+    if (pulseSensor.sawStartOfBeat())              // Constantly test to see if "a beat happened". 
+    {            
+     Serial.println("♥  A HeartBeat Happened ! "); // If test is "true", print a message "a heartbeat happened".
+     Serial.print("BPM: ");                        // Print phrase "BPM: " 
+     Serial.println(myBPM);
+     lcd.clear();
+     lcd.setCursor(0,0);
+     lcd.print("myBPM = ");
+     lcd.print(myBPM);
+     delay(1000);
+     lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("UPLOADING...");
+    sendVal = myBPM; // Send a random number between 1 and 1000
+    String sendData = "GET https://api.thingspeak.com/update?api_key="+ myAPI +"&"+ myFIELD +"="+String(sendVal);
+    espData("AT+CIPMUX=1", 1000, DEBUG);       //Allow multiple connections
+    espData("AT+CIPSTART=0,\"TCP\",\""+ myHOST +"\","+ myPORT, 1000, DEBUG);
+    espData("AT+CIPSEND=0," +String(sendData.length()+4),1000,DEBUG);  
+    espSerial.find(">"); 
+    espSerial.println(sendData);
+    Serial.print("Value to be sent: ");
+    Serial.println(sendVal);
+   
+     
+    espData("AT+CIPCLOSE=0",1000,DEBUG);
+    delay(10000);
+
+     lcd.setCursor(0,1);
+      lcd.print("UPLOADED");
+      delay(2000);
+
+    if(myBPM>120 || myBPM<60)
+      {
+        digitalWrite(buzzer,HIGH);
+        delay(1000);
+        Serial.println(" BPM OUT OF RANGE");
+        lcd.clear();
+        lcd.setCursor(5,0);
+        lcd.print("EMERGENCY");
+        lcd.setCursor(0,1);
+        lcd.print("BPM OUT RANGE");
+        delay(1000);
+        digitalWrite(buzzer,LOW);
+  }
+  }
+  }
+
+  String espData(String command, const int timeout, boolean debug)
+{
+  Serial.print("AT Command ==> ");
+  Serial.print(command);
+  Serial.println("     ");
+  
+  String response = "";
+  espSerial.println(command);
+  long int time = millis();
+  while ( (time + timeout) > millis())
+  {
+    while (espSerial.available())
+    {
+      char c = espSerial.read();
+      response += c;
+    }
+  }
+  if (debug)
+  {
+    //Serial.print(response);
+  }
+  return response;
+}
+
