@@ -1,0 +1,203 @@
+#include <ESP8266WiFi.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+
+#define m1            D1
+#define m2            D2
+#define m3            D3
+#define m4            D4
+//int m1= D1;
+
+#define WLAN_SSID       "Astro"             // Your SSID
+#define WLAN_PASS       "astro6hee"        // Your password
+
+/************************* Adafruit.io Setup *********************************/
+
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883                   // use 8883 for SSL
+#define AIO_USERNAME    "JijuGrace"            // Replace it with your username
+#define AIO_KEY         "aio_qpmG09hRHOqqU9P3Jn86qYgj2bwf"   // Replace with your Project Auth Key
+
+/************ Global State (you don't need to change this!) ******************/
+
+// Create an ESP8266 WiFiClient class to connect to the MQTT server.
+WiFiClient client;
+// or... use WiFiFlientSecure for SSL
+//WiFiClientSecure client;
+
+// Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+
+/****************************** Feeds ***************************************/
+
+
+// Setup a feed called 'onoff' for subscribing to changes.
+Adafruit_MQTT_Subscribe motor1 = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME"/feeds/low"); // FeedName
+Adafruit_MQTT_Subscribe motor2 = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME"/feeds/medium"); // FeedName
+Adafruit_MQTT_Subscribe motor3 = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME"/feeds/high"); // FeedName
+Adafruit_MQTT_Subscribe motor4 = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME"/feeds/stop"); // FeedName
+
+
+void MQTT_connect();
+
+void setup() 
+{
+  Serial.begin(115200);
+
+  pinMode(m1, OUTPUT);
+  pinMode(m2, OUTPUT);
+  pinMode(m3, OUTPUT);
+  pinMode(m4, OUTPUT);
+
+  // Connect to WiFi access point.
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(WLAN_SSID);
+
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    digitalWrite(m1,LOW);
+    digitalWrite(m2,LOW);
+    digitalWrite(m3,LOW);
+    digitalWrite(m4,LOW);
+  }
+  Serial.println();
+
+  Serial.println("WiFi connected");
+  Serial.println("IP address: "); 
+  Serial.println(WiFi.localIP());
+ 
+
+  // Setup MQTT subscription for onoff feed.
+  mqtt.subscribe(&motor1);
+  mqtt.subscribe(&motor2);
+  mqtt.subscribe(&motor3);
+  mqtt.subscribe(&motor4);
+}
+
+void loop()
+{
+ 
+  MQTT_connect();
+  
+  Adafruit_MQTT_Subscribe *subscription;
+  while ((subscription = mqtt.readSubscription(5000))) 
+  {
+  
+    if (subscription == &motor2) 
+    {
+      Serial.print(F("Got: "));
+      Serial.println((char *)motor2.lastread);
+      int motor2_State = atoi((char *)motor2.lastread);
+      digitalWrite(m2,!(motor2_State));
+      Serial.print("status");
+      Serial.println(motor2_State);
+      
+        if(motor2_State==1)
+     {
+      
+     Serial.println("Medium Speed");
+      digitalWrite(m2,HIGH);
+     } 
+       else{
+       Serial.print("2 offffffffff");
+       digitalWrite(m2,LOW);
+     }
+         delay(1000);
+      }
+
+      if (subscription == &motor1) 
+      {
+      Serial.print(F("Got: "));
+      Serial.println((char *)motor1.lastread);
+      int motor1_State = atoi((char *)motor1.lastread);
+      digitalWrite(m1,!(motor1_State));
+      Serial.println("status");
+     Serial.println(motor1_State);
+      if(motor1_State==1)
+     {
+      
+     Serial.println("LOW Speed");
+     digitalWrite(m1,HIGH);
+      Serial.println("Led");
+     
+     }
+     else{
+       Serial.println("1 offffffffff");
+       digitalWrite(m1,LOW);
+       }
+         delay(1000);
+      }
+     if (subscription == &motor3) 
+      {
+      Serial.print(F("Got: "));
+      Serial.println((char *)motor3.lastread);
+      int motor3_State = atoi((char *)motor3.lastread);
+      digitalWrite(m3,!(motor3_State));
+      Serial.print("status");
+     Serial.println(motor3_State);
+         if(motor3_State==1)
+     {
+      
+     Serial.println("High Speed");
+      digitalWrite(m3,HIGH);
+     }
+       else{
+       Serial.print("3 offffffffff");
+       digitalWrite(m3,LOW);
+      }
+         delay(1000);
+      }
+     if (subscription == &motor4) 
+      {
+      Serial.print(F("Got: "));
+      Serial.println((char *)motor4.lastread);
+      int motor4_State = atoi((char *)motor4.lastread);
+      digitalWrite(m4,!(motor4_State));
+      Serial.print("status");
+     Serial.println(motor4_State);
+ if(motor4_State==1)
+     {
+      
+     Serial.println("Stop Motor");
+     digitalWrite(m4,HIGH);
+     }
+      else{
+       Serial.print("4 offffffffff");
+       digitalWrite(m4,LOW);
+      }
+           
+      delay(1000);
+  }
+  }
+}
+   
+
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print("Connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+    Serial.println(mqtt.connectErrorString(ret));
+    Serial.println("Retrying MQTT connection in 5 seconds...");
+    mqtt.disconnect();
+    delay(5000);  // wait 5 seconds
+    retries--;
+    if (retries == 0) {
+      // basically die and wait for WDT to reset me
+      while (1);
+    }
+  }
+  Serial.println("MQTT Connected!");
+  
+}
