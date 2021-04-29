@@ -1,0 +1,78 @@
+#include<LiquidCrystal.h>
+#include<Servo.h>
+
+Servo Servo1;
+void motor_0n();
+int sw=6;
+int servoPin = 5; 
+
+int RS=12;
+int EN=11;
+int D4=10;
+int D5=9;
+int D6=8;
+int D7=7;
+
+int count=0;
+LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
+
+void setup() 
+{
+   Serial.begin(9600);
+    lcd.begin(16,2);
+Servo1.attach(servoPin);
+ pinMode(sw,INPUT_PULLUP);
+}
+
+void loop() {
+ lcd.clear();
+ lcd.setCursor(3,0);
+ lcd.print("SMART HELMET");
+ delay(1000);
+
+ int sw_val = digitalRead(sw);
+
+  if(sw_val==0)
+ { 
+//   count=count+1;
+//  if(count==1)
+//  {
+
+//  Serial.println("Switch Pressed");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Switch Pressed");
+  lcd.setCursor(0,1);
+  lcd.print("WIPER ON");
+  motor_0n();
+    delay(1000);
+ }
+ }
+
+
+ void motor_0n()
+{
+  lcd.clear();
+  int sw_val=0;
+ while(true)
+ {
+//  count=count+1;
+//  if(count==1)
+//  {
+  Serial.println(sw_val);
+    Servo1.write(90); 
+    delay(500); 
+     Servo1.write(0); 
+    delay(500); 
+    Serial.print("hello");
+    sw_val=1;
+ if(sw_val==1)
+  {
+    sw_val=digitalRead(sw);
+  }
+    if(sw_val==0){
+    Serial.write("exit");
+    break;
+ }
+ }
+}
