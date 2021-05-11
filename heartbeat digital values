@@ -1,0 +1,245 @@
+#include "DHT.h"
+DHT dht;
+#define USE_ARDUINO_INTERRUPTS true    // Set-up low-level interrupts for most acurate BPM math.
+#include<LiquidCrystal.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#define ONE_WIRE_BUS 2
+  int cnt=0,beat=0;   
+  int K = 0;   
+int hb=9;
+int p=0,sec=0;
+#define gas 8
+const int rs = 12, en = 11, d4 = 4, d5 = 5, d6 = 6, d7 = 7;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+void setup() {   
+
+  Serial.begin(9600);  
+ lcd.begin(16,2);
+  lcd.clear();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("monitoring system");
+  lcd.setCursor(0, 1);
+  lcd.print("for NICU");
+  delay(500);
+    dht.setup(10); // data pin 2
+
+ pinMode(hb,INPUT);
+}
+
+
+
+void loop()
+{
+   cnt=digitalRead(hb);
+ 
+ if(cnt==LOW)
+
+  {
+     lcd.clear();
+     lcd.print("reading");
+    beat++;
+    delay(150);
+    Serial.print(beat);
+    
+  }
+  else
+  {
+    delay(40);
+    p++;
+    
+    if(p>5)
+    {
+      p=0;
+      sec++;
+      //Serial.print(sec);
+
+      if(sec>60)
+      {
+       sec=0;
+       
+         Serial.println("beat:");
+        Serial.print(beat);
+       
+        delay(1000);
+      
+       if((beat<30)&&(beat!=0)||(beat>80))
+      {
+        Serial.print("heart beat exceeded");
+        
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("heart beat unstable");
+     lcd.setCursor(0,1);
+      lcd.print("BPM:");
+      lcd.setCursor(5,1);
+      lcd.print(beat);
+      beat_SendMessage();  
+    lcd.setCursor(0,1);
+  lcd.print("MESSAGE SENT");
+  beat=0;
+  }
+      
+      else if((beat>30)||(beat<80))
+      {
+        Serial.print("heart beat  normal");  
+    lcd.clear();
+    lcd.setCursor(0,0);
+  lcd.print("Heart beat normal");
+  lcd.setCursor(0,1);
+      lcd.print("BPM:");
+      lcd.setCursor(5,1);
+      lcd.print(beat);
+  beat=0;
+  delay(1000);
+  }
+  else 
+   {
+        Serial.print("place a finger");  
+    lcd.clear();
+    lcd.setCursor(0,0);
+  lcd.print("place a finger");
+  beat=0;
+  delay(1000);
+  }
+
+        delay(dht.getMinimumSamplingPeriod());
+
+  float humidity = dht.getHumidity();
+  float temperature = dht.getTemperature();
+
+ // Serial.print(
+    dht.getStatusString();
+  Serial.print("\t");
+  Serial.print(humidity, 1);
+  Serial.print("\t\t");
+  Serial.print(temperature, 1);
+  Serial.print("\t\t");
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("hum:");
+  lcd.setCursor(5, 0);
+  lcd.print(humidity);
+  delay(1000);
+
+  Serial.print(" Requesting temperatures...");
+  sensors.requestTemperatures();
+  Serial.println("DONE");
+  Serial.print("Temperature is: ");
+  //Serial.println(sensors.getTempCByIndex(0));
+  float temp = sensors.getTempCByIndex(0);
+  Serial.print(temp);
+  Serial.print(humidity);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("hum:");
+  lcd.setCursor(5, 0);
+  lcd.print(humidity);
+  lcd.setCursor(0, 1);
+  lcd.print("temp:");
+  lcd.setCursor(5, 1);
+  lcd.print(temp);
+  delay(1000);
+
+  if (temp > 33)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 1);
+    lcd.print("temp:");
+    lcd.setCursor(5, 1);
+    lcd.print(temp);
+    lcd.setCursor(0, 0);
+    lcd.print("temperature high");
+    temp_SendMessage();
+    lcd.setCursor(0,1);
+  lcd.print("MESSAGE SENT");
+    delay(500);
+  }
+  else
+  {
+    lcd.setCursor(0, 0);
+    lcd.print("temperature normal");
+    delay(1000);
+  }
+   K = digitalRead(gas);
+  Serial.print(K);
+
+  if (K == 0)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("CO2 increase");
+    gas_SendMessage();
+    lcd.setCursor(0,1);
+  lcd.print("MESSAGE SENT");
+    delay(500);
+  }
+  else if (K == 1)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("normal CO2");
+    delay(1000);
+  }
+
+      }   
+      }
+    }
+    }
+
+   //////GSM///////////
+    
+void temp_SendMessage()
+{
+  Serial.println("AT");    //Sets the GSM Module in Text Mode
+  delay(1000);  // Delay of 1000 milli seconds or 1 second
+  Serial.println("ATEO");
+  delay(1000);
+  Serial.println("AT+CMGF=1");
+  delay(1000);
+  Serial.println("AT+CMGS=\"+918459199189\""); // Replace x with mobile number
+  delay(1000);
+  Serial.println("temp increase");// The SMS text you want to send
+  delay(100);
+  Serial.write(26);// ASCII code of CTRL+Z
+  delay(1000);
+  Serial.println("msg sent");
+
+}
+void gas_SendMessage()
+{
+  Serial.println("AT");    //Sets the GSM Module in Text Mode
+  delay(1000);  // Delay of 1000 milli seconds or 1 second
+  Serial.println("ATEO");
+  delay(1000);
+  Serial.println("AT+CMGF=1");
+  delay(1000);
+  Serial.println("AT+CMGS=\"+918459199189\""); // Replace x with mobile number
+  delay(1000);
+  Serial.println("CO2 increase");// The SMS text you want to send
+  delay(100);
+  Serial.write(26);// ASCII code of CTRL+Z
+  delay(1000);
+  Serial.println("msg sent");
+
+} void beat_SendMessage()
+{
+  Serial.println("AT");    //Sets the GSM Module in Text Mode
+  delay(1000);  // Delay of 1000 milli seconds or 1 second
+  Serial.println("ATEO");
+  delay(1000);
+  Serial.println("AT+CMGF=1");
+  delay(1000);
+  Serial.println("AT+CMGS=\"+918459199189\""); // Replace x with mobile number
+  delay(1000);
+  Serial.println("heart beat unstable");// The SMS text you want to send
+  delay(100);
+  Serial.write(26);// ASCII code of CTRL+Z
+  delay(1000);
+  Serial.println("msg sent");
+
+}
